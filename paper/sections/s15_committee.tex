@@ -1,0 +1,116 @@
+\subsection{Motivation}
+
+\Cref{sec:rotation} introduced epoch-based committee rotation under a
+stake-weighted admission model.
+This section extends that model to fully permissionless participation via
+VRF-based sortition, proving sybil resistance and compatibility with the BFT
+safety threshold.
+
+\subsection{Design Goals}
+
+\begin{itemize}
+  \item \textbf{G9 (Open Entry).} Any node depositing minimum stake may
+        participate.
+  \item \textbf{G10 (Unpredictability).} Committee membership for epoch~$e$
+        cannot be predicted before epoch~$e{-}1$ ends.
+  \item \textbf{G11 (Proportionality).} Selection probability is proportional
+        to stake.
+  \item \textbf{G12 (Sybil Resistance).} Splitting stake across $k$ identities
+        yields no additional advantage.
+\end{itemize}
+
+\subsection{Beacon Seed Chain}
+
+\begin{definition}[Beacon Seed Chain]
+\[
+  \mathit{seed}_0 = H(\text{``AXIOM\_GENESIS''} \| \mathit{pp}),\quad
+  \mathit{seed}_{e+1} = H\!\left(\mathit{seed}_e \;\|\;
+    \mathsf{VDF}(\mathit{seed}_e, T_{\mathrm{vdf}}) \;\|\;
+    H(B_{\mathrm{last},e})\right).
+\]
+\end{definition}
+
+\begin{lemma}[Seed Unpredictability]\label{lem:seed}
+Under VRF pseudorandomness and VDF sequentiality, the advantage of any PPT
+adversary controlling $f < n/3$ validators in predicting $\mathit{seed}_{e+1}$
+at the start of epoch~$e$ is negligible.
+\end{lemma}
+\begin{proof}[Proof sketch]
+$\mathsf{VDF}(\mathit{seed}_e, T_{\mathrm{vdf}})$ requires $T_{\mathrm{vdf}}$
+sequential steps and cannot be precomputed; honest epoch activity contributes
+fresh entropy via $H(B_{\mathrm{last},e})$.
+By VRF pseudorandomness, knowing $\mathit{seed}_e$ does not allow predicting
+which nodes will produce high-ranking VRF outputs.
+\end{proof}
+
+\subsection{Sortition Protocol}
+
+\begin{definition}[Sortition]\label{def:sortition}
+In epoch~$e$, each node~$v$ with stake $\mathit{stake}_v$ computes:
+\[
+  (y_v, \pi_v) = \mathsf{VRF.Eval}(\mathit{sk}_v,\;
+  \mathit{seed}_e \| \text{``COMMITTEE''} \| e).
+\]
+Node~$v$ is \emph{selected} iff:
+\[
+  \frac{H(y_v)}{2^\lambda} \;\leq\; \tau(e) \cdot
+  \frac{\mathit{stake}_v}{\mathit{stake\_total}_e}.
+\]
+Selected nodes broadcast $(\mathit{pk}_v, y_v, \pi_v, \mathit{stake}_v,
+w_{\mathit{stake}})$, where $w_{\mathit{stake}}$ is a Merkle proof of stake.
+\end{definition}
+
+\begin{theorem}[Expected Committee Size]\label{thm:committee-size}
+$\mathbb{E}[|V_e|] = \tau(e) \cdot (\mathit{stake\_active} /
+\mathit{stake\_unit})$.
+Setting $\tau(e) = n_{\mathit{target}} \cdot \mathit{stake\_unit} /
+\mathit{stake\_active}$ yields $\mathbb{E}[|V_e|] = n_{\mathit{target}}$.
+\end{theorem}
+
+\begin{theorem}[Sybil Non-Amplification]\label{thm:sybil}
+An adversary with total stake $S_{\mathit{adv}}$ splitting across $k$
+identities has the same expected committee seats as a single identity with
+stake $S_{\mathit{adv}}$.
+\end{theorem}
+\begin{proof}
+For $k$ identities each with stake $S_{\mathit{adv}}/k$:
+\[
+  \Pr[\text{at least one selected}]
+  = 1 - \prod_{i=1}^k \!\left(1 - \tau \cdot
+    \frac{S_{\mathit{adv}}/k}{\mathit{stake\_total}}\right)
+  \;\underset{k\to\infty}{\longrightarrow}\;
+  \tau \cdot \frac{S_{\mathit{adv}}}{\mathit{stake\_total}},
+\]
+which equals the single-identity selection probability.
+\end{proof}
+
+\subsection{Adaptive Committee Sizing}
+
+\begin{definition}[Adaptive $\tau$]
+\[
+  \tau(e{+}1) = \tau(e) \cdot \frac{n_{\mathit{target}}}{|V_e|},
+  \quad
+  \tau(e) \geq \tau_{\min} = \frac{(3f_{\mathit{target}}+1) \cdot
+  \mathit{stake\_unit}}{\mathit{stake\_active}}.
+\]
+$\tau_{\min}$ ensures $\mathbb{E}[|V_e|] \geq 3f_{\mathit{target}}+1$ at all
+times.
+\end{definition}
+
+\subsection{Bootstrap and Genesis Committee}
+
+The first epoch uses a pre-announced genesis committee of $k \geq 3f+1$ early
+stake depositors.
+This is not a trusted setup: genesis members receive no special protocol
+privileges beyond epoch~0.
+From epoch~1 onward, sortition (\cref{def:sortition}) fully controls
+committee membership.
+
+\subsection{Honest Disclosure}
+
+Stake concentration creates plutocracy risk; mitigation options (quadratic
+weighting, per-validator stake caps) are deployment choices not specified here.
+``Nothing-at-stake'' behavior (signing multiple forks) is deterred by slashing
+(\cref{sec:dos}, P4).
+Low overall stake participation can compress committee size toward $\tau_{\min}$,
+reducing liveness margin.

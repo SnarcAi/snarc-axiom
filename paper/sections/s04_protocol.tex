@@ -1,0 +1,133 @@
+\subsection{Coins as Cryptographic Objects}
+
+A coin is not a ledger entry.
+It is a commitment paired with a private witness:
+\[
+  \mathsf{Coin} \;:=\; \bigl(\mathit{cm};\; v, \rho, r, s, w\bigr),
+\]
+where $\mathit{cm} = \mathsf{Com}(\langle v, \rho\rangle;\, r)$ is the
+public commitment, $v$ is the coin value, $\rho$ is a secret serial seed,
+$r$ is commitment randomness, $s$ is the spend key, and $w$ is an RSA
+accumulator membership witness for $\mathit{cm}$ in the current
+$\mathsf{ACC}$.
+The global state does not track balances per identity; ownership is
+demonstrated by proving knowledge of a witness consistent with the current
+compact state.
+
+\subsection{Nullifiers and Double-Spend Prevention}
+
+For each coin define its \emph{nullifier}:
+\[
+  \mathit{sn} = \mathsf{PRF}_s(\rho).
+\]
+A nullifier is revealed only at spend time.
+The spent nullifier set is committed by $\mathsf{Root}_k$.
+Double-spending reduces to ensuring the same $\mathit{sn}$ cannot be
+accepted under two distinct finalized states (proved in
+\cref{thm:safety,thm:rotation-safety}).
+
+\subsection{Transaction Types}
+
+\paragraph{SpendTx (primary).}
+$\mathit{TX} = (\mathit{sn},\, \mathit{cm}_{\mathit{new}},\, \pi)$, where
+$\pi$ is a SNARK proof for relation $\mathcal{R}$ (\cref{sec:relation}).
+
+\paragraph{MintTx (issuance).}
+$\mathit{MintTx} = (\mathit{cm}_{\mathit{new}},\, v_{\mathit{pub}},\,
+\sigma_{\mathit{authority}})$, where the issuing authority signs the
+committed value.
+The new coin is inserted into $\mathsf{ACC}$ without a nullifier reveal.
+Full analysis of issuance policy is deferred to the application layer.
+
+\paragraph{BurnTx (redemption).}
+$\mathit{BurnTx} = (\mathit{sn},\, v_{\mathit{pub}},\, \pi_{\mathit{burn}})$,
+where $\pi_{\mathit{burn}}$ proves knowledge of a valid coin with value
+$v_{\mathit{pub}}$ and correctly derived nullifier, without creating a new
+commitment.
+The nullifier is inserted into $\mathsf{Root}$; no $\mathit{cm}_{\mathit{new}}$
+is added to $\mathsf{ACC}$.
+
+The v1 security analysis (\cref{sec:consistency}--\cref{sec:committee})
+focuses on SpendTx; MintTx and BurnTx satisfy analogous correctness and
+soundness properties by construction.
+
+\subsection{Global State and Finalization Certificates}
+
+The system maintains only two compact roots:
+\[
+  S_k = (\mathsf{ACC}_k,\; \mathsf{Root}_k,\; \mathit{epoch}_k,\;
+         \mathit{seq}_k).
+\]
+Each finalized batch produces a certificate:
+\[
+  C_k = (B_k,\; S_k,\; \sigma_k),
+\]
+where $\sigma_k = \mathsf{TSig}_{t_e}\!\left(H\!\left(B_k \;\|\;
+S_k.\mathsf{ACC} \;\|\; S_k.\mathsf{Root} \;\|\; \cdots\right)\right)$
+covers both the batch content and the resulting state roots jointly
+(\cref{thm:atomicity}).
+Clients treat $C_k$ as the canonical finality artifact, replacing ledger
+entries.
+
+\subsection{The ZK Relation~$\mathcal{R}$}
+\label{sec:relation}
+
+\paragraph{Public inputs.}
+$(\mathsf{ACC},\; \mathsf{Root},\; \mathit{sn},\; \mathit{cm}_{\mathit{new}})$
+
+\paragraph{Witness.}
+$(v, \rho, r, s, w, \rho_{\mathit{new}}, r_{\mathit{new}})$
+
+\paragraph{Constraints.}
+The prover demonstrates:
+
+\begin{enumerate}
+  \item \textit{Old commitment well-formed:}
+    $\mathit{cm} = \mathsf{Com}(\langle v, \rho\rangle;\, r)$.
+
+  \item \textit{Membership in accumulator:}
+    $\mathsf{VerifyMem}(\mathsf{ACC},\, \mathit{cm},\, w) = 1$.
+
+  \item \textit{Nullifier correctness:}
+    $\mathit{sn} = \mathsf{PRF}_s(\rho)$.
+
+  \item \textit{Value conservation:}
+    $\mathit{cm}_{\mathit{new}} = \mathsf{Com}(\langle v, \rho_{\mathit{new}}
+    \rangle;\, r_{\mathit{new}})$.
+    For multi-output extensions, the circuit enforces
+    $\sum_j v_{\mathit{out},j} = v_{\mathit{in}}$.
+
+  \item \textit{Spend authorization:}
+    The prover knows spend key $s$ bound to the committed coin.
+    In the circuit this is enforced by deriving a key commitment
+    $\mathsf{Com}(s;\, r_s)$ embedded in the old coin's committed payload,
+    ensuring only the holder of $s$ can produce a satisfying witness.
+\end{enumerate}
+
+The \textit{unspent condition} ($H(\mathit{sn}) \notin \mathsf{Root}$) is
+verified outside the circuit against the current state snapshot, keeping the
+circuit small and enabling cheap Tier-0 filtering (\cref{sec:dos}).
+
+\paragraph{Proof and verification.}
+\[
+  \pi \;\leftarrow\; \mathsf{Prove}_{\mathcal{R}}\!\left(\mathsf{ACC},\,
+  \mathsf{Root},\, \mathit{sn},\, \mathit{cm}_{\mathit{new}};\;
+  \mathit{witness}\right).
+\]
+Acceptance at the protocol level requires:
+(i) $\mathsf{ZKVerify}(\pi, \mathsf{ACC}, \mathit{sn},
+\mathit{cm}_{\mathit{new}}) = 1$;
+(ii) $\mathsf{NonMember}(\mathsf{Root}, H(\mathit{sn})) = 1$;
+(iii) batch-level nullifier distinctness; and
+(iv) threshold signature consistency of the finalization certificate.
+
+\subsection{High-Level Acceptance Rule}
+
+Given finalized state $S_{k-1}$ and candidate $\mathit{TX}$:
+\begin{enumerate}
+  \item Verify $\pi$ against $\mathsf{ACC}_{k-1}$ and public inputs.
+  \item Verify $H(\mathit{sn}) \notin \mathsf{Root}_{k-1}$.
+  \item Include $\mathit{TX}$ in a BFT-proposed batch.
+  \item Upon threshold finalization, produce $C_k$ with atomic state update
+        (\cref{sec:atomicity}).
+\end{enumerate}

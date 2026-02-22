@@ -1,0 +1,96 @@
+\subsection{Adversarial Capabilities}
+
+We consider a PPT adversary $\mathcal{A}$ that:
+\begin{itemize}
+  \item controls an arbitrary fraction of non-validator network nodes;
+  \item schedules and delays messages arbitrarily before GST (the Global
+        Stabilization Time of the DLS partial-synchrony
+        model~\cite{dwork1988consensus});
+  \item adaptively corrupts up to $f_e < n_e/3$ validators within each
+        epoch~$e$; and
+  \item is computationally bounded (PPT).
+\end{itemize}
+
+$\mathcal{A}$ may attempt to: forge coin proofs, double-spend a coin,
+inflate value, deanonymize senders, or violate state consistency during
+epoch transitions.
+$\mathcal{A}$ may also attempt sustained spam/DoS
+(\cref{sec:dos}).
+
+\subsection{Cryptographic Assumptions}
+
+The following hardness assumptions are used throughout; each is stated where
+it is first required.
+
+\begin{itemize}
+  \item \textbf{DL}: Discrete logarithm in $\mathbb{G}$ is hard.
+  \item \textbf{CRH}: $H$ is collision resistant.
+  \item \textbf{PRF}: $\mathsf{PRF}_s(\cdot)$ is a secure pseudorandom
+        function.
+  \item \textbf{sRSA}: Strong RSA assumption in $\mathbb{Z}_N^*$ (underlies
+        accumulator security).
+  \item \textbf{KS}: Knowledge soundness of the SNARK proof system
+        (Groth16: holds under the knowledge-of-exponent assumption, which is
+        non-falsifiable but standard in pairing-based SNARK analyses; PLONK:
+        holds in the algebraic group model).
+  \item \textbf{ZK}: Zero-knowledge of the SNARK proof system.
+  \item \textbf{TSig-UF}: Threshold signature unforgeability (BLS TSig under
+        DL).
+  \item \textbf{VDF-Seq}: Sequentiality of the VDF (modular squaring in a
+        group of unknown order).
+\end{itemize}
+
+\subsection{Network Model}
+
+We use the partial synchrony model of Dwork--Lynch--Stockmeyer
+\cite{dwork1988consensus}: after an unknown GST, all messages arrive within
+a known bound $\Delta$.
+Before GST, \emph{safety} is maintained; \emph{liveness} is guaranteed only
+after GST.
+
+\subsection{Validator Corruption Bound}
+
+In epoch $e$, there are $n_e$ validators; at most $f_e < n_e/3$ may be
+Byzantine.
+Finality threshold: $t_e = \lfloor 2n_e/3 \rfloor + 1$.
+Byzantine validators may send conflicting messages, withhold signatures, or
+attempt to equivocate; honest validators follow the protocol exactly.
+
+\subsection{Security Goals}
+
+We target the following properties, proved in the sections indicated.
+
+\begin{description}
+  \item[Correctness] (\cref{sec:consistency}): Honest execution produces
+        accepted transactions.
+  \item[Unforgeability] (\cref{sec:atomicity}): No PPT adversary can spend
+        a coin without knowing its witness.
+  \item[Value Conservation]: No PPT adversary can inflate coin values.
+  \item[Double-Spend Resistance] (\cref{sec:consistency}): The same nullifier
+        cannot be finalized twice.
+  \item[Anonymity] (\cref{sec:committee}): An adversary cannot distinguish
+        which of two candidate coins produced a challenge transaction.
+  \item[Non-Malleability]: A valid transaction cannot be transformed to steal
+        value without knowing witness material.
+  \item[Safety] (\cref{sec:consistency}): No two honest verifiers accept
+        conflicting finalized state.
+  \item[Liveness] (\cref{sec:consistency}): After GST, valid transactions are
+        finalized within $O(T_{\mathrm{beacon}} + \kappa\Delta)$.
+  \item[Atomic Transition] (\cref{sec:atomicity}): ACC and SpentSetRoot update
+        jointly or not at all.
+\end{description}
+
+\subsection{Out of Scope}
+
+We explicitly do not claim:
+\begin{itemize}
+  \item \emph{Full censorship resistance}: we target only weak fairness via VDF
+        ordering and attributable misbehavior (\cref{sec:consistency}).
+  \item \emph{Bitcoin-equivalent trustlessness}: Groth16 requires a trusted
+        setup; the RSA accumulator requires a trusted modulus generation.
+        Eliminating both requires setup-free proofs and class-group
+        accumulators, which we defer to future work.
+  \item \emph{Network-layer DoS immunity}: a state-level adversary with
+        unlimited bandwidth can flood the physical network; this is outside the
+        scope of this protocol.
+\end{itemize}

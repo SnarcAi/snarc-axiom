@@ -1,0 +1,110 @@
+\subsection{Notation}
+
+Let $\lambda$ denote the security parameter.
+Let $\mathbb{G}$ be a cyclic group of prime order $q$ with generators $g, h$
+such that $\log_g h$ is unknown.
+We write $x \xleftarrow{\$} X$ for uniform sampling from set $X$, and
+$\mathsf{negl}(\lambda)$ for a negligible function in $\lambda$.
+Ordered lists are written $[x_i]_{i=1}^{m}$; $\|$ denotes bitstring
+concatenation.
+
+The global state at finalization step $k$ is:
+\[
+  S_k = (\mathsf{ACC}_k,\; \mathsf{Root}_k,\; \mathit{epoch}_k,\;
+         \mathit{seq}_k),
+\]
+where $\mathsf{ACC}_k$ is the accumulator value, $\mathsf{Root}_k$ is the
+Sparse Merkle Tree (SMT) root committing to spent nullifiers, and
+$(\mathit{epoch}_k, \mathit{seq}_k)$ are monotonically increasing counters.
+
+\subsection{Pedersen Commitments}
+
+Over group $\mathbb{G}$, define:
+\[
+  \mathsf{Com}(m;\, r) = g^m \cdot h^r.
+\]
+Pedersen commitments are perfectly hiding and computationally binding under the
+discrete logarithm (DL) assumption in $\mathbb{G}$.
+In \textsc{Axiom}, a coin commitment encodes both the value and a secret seed:
+\[
+  \mathit{cm} = \mathsf{Com}(\langle v, \rho\rangle;\, r),
+\]
+where $v$ is the coin value, $\rho$ is a secret serial seed, and $r$ is
+commitment randomness.
+
+\subsection{Pseudorandom Function}
+
+$\mathsf{PRF}_s(\cdot)$ is a secure PRF keyed by spend key $s$.
+Outside the ZK circuit we instantiate it with BLAKE3; inside the circuit we
+use Poseidon~\cite{grassi2021poseidon} for efficient constraint generation.
+
+\subsection{RSA Accumulator}
+
+Let $N = pq$ be an RSA modulus with unknown factorization and generator
+$g \in \mathbb{Z}_N^*$.
+Let $H' : \{0,1\}^* \to \mathbb{P}$ be a deterministic hash-to-prime
+function (smallest prime $p$ such that $p = H(\cdot\,\|\,\mathit{ctr})$,
+iterated over a counter; average 3--4 iterations by Bertrand's postulate).
+
+The accumulator over a set $\{x_i\}$ is:
+\[
+  \mathsf{ACC} = g^{\,\prod_i H'(x_i)} \bmod N.
+\]
+Batch update for a list $[x_i]_{i=1}^{m}$:
+\[
+  \mathsf{ACC}' = \mathsf{ACC}^{\,\prod_{i=1}^{m} H'(x_i)} \bmod N.
+\]
+A membership witness $w$ for element $x$ satisfies:
+\[
+  w^{H'(x)} \equiv \mathsf{ACC} \pmod{N}.
+\]
+Security relies on the strong RSA assumption.
+
+\subsection{Sparse Merkle Tree}
+
+$\mathsf{SMT}$ is a Sparse Merkle Tree over $2^\lambda$ leaves (256-bit
+address space).
+$\mathsf{Root}_k$ commits to the set of spent nullifiers (stored as
+$H(\mathit{sn})$ at leaf $H(\mathit{sn})$).
+Non-membership proofs follow directly from the tree structure under collision
+resistance of the hash function (Poseidon/BLAKE3 as appropriate).
+
+\subsection{Threshold Signature Scheme}
+
+$\mathsf{TSig} = (\mathsf{KeyGen}, \mathsf{SignShare}, \mathsf{Combine},
+\mathsf{Verify})$ is a $(t, n)$-threshold signature scheme.
+In epoch $e$ we set $t_e = \lfloor 2n_e/3 \rfloor + 1$, tolerating up to
+$f_e < n_e/3$ Byzantine validators.
+We instantiate with BLS threshold signatures over BLS12-381:
+aggregated signature size is 48~bytes (independent of $n$).
+
+\subsection{VDF Beacon}
+
+A Verifiable Delay Function~\cite{pietrzak2019vdf,wesolowski2019vdf}
+$\mathsf{VDF} = (\mathsf{Setup}, \mathsf{Eval}, \mathsf{Verify})$ satisfies
+sequentiality ($\mathsf{Eval}(x, T)$ requires ${\approx}T$ sequential steps),
+uniqueness, and efficient verification ($O(\log T)$).
+The epoch beacon derives:
+\[
+  \mathit{seed}_{e+1} = H\!\left(\mathit{seed}_e \;\|\;
+    \mathsf{VDF}(\mathit{seed}_e, T_{\mathrm{vdf}}) \;\|\;
+    H(B_{\mathrm{last},e})\right),
+\]
+producing an unpredictable, publicly verifiable ordering key for each epoch.
+
+\subsection{NIZK Proof System}
+
+We assume a succinct NIZK $\Pi = (\mathsf{Setup}, \mathsf{Prove},
+\mathsf{Verify})$ satisfying completeness, knowledge soundness (via an
+extractor), and zero-knowledge.
+The v1 instantiation uses Groth16~\cite{groth2016size} over BLS12-381.
+Where non-malleability is required (Section~\ref{sec:dos}),
+we additionally require simulation-extractability, achievable via
+PLONK~\cite{gabizon2019plonk} or Fiat--Shamir with appropriate assumptions.
+
+\paragraph{Trusted setup note.}
+Groth16 requires a circuit-specific trusted setup (``toxic waste'' must be
+discarded).
+A multi-party computation ceremony mitigates this; eliminating the requirement
+entirely calls for a setup-free system (e.g., STARKs) and is deferred to
+future work (Section~\ref{sec:conclusion}).

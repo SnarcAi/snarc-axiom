@@ -1,0 +1,117 @@
+\section{Introduction}
+\label{sec:intro}
+
+\subsection{Problem Statement}
+
+Since Bitcoin introduced the blockchain as a global append-only ledger,
+essentially all decentralized payment systems have inherited this architectural
+decision.
+The ledger simultaneously serves three functions: establishing a canonical
+transaction order, preventing double-spending by recording all past nullifiers,
+and providing a verifiable audit trail for coin validity.
+This coupling is not architecturally necessary.
+The three functions can be decomposed---and the audit trail, which drives
+ledger growth, can be eliminated entirely if coin validity is established by
+cryptographic proof rather than chain membership.
+
+Existing privacy-preserving systems such as Zcash~\cite{zcash2022protocol}
+demonstrate that double-spend prevention can be reduced to a nullifier set and
+coin validity to zero-knowledge proofs~\cite{ben2014zerocash}.
+Yet Zcash retains a blockchain as the substrate for these structures, requiring
+every full node to store and synchronize the complete transaction history.
+The resulting state growth is linear in transaction count, creating long-run
+pressure toward centralization by increasing storage, bandwidth, and initial
+synchronization cost for participants.
+
+\subsection{This Work}
+
+We ask: \emph{can a payment system achieve the security properties of
+Zcash---double-spend resistance, full transaction privacy, value
+conservation---without any global transaction ledger?}
+
+We answer affirmatively, subject to standard cryptographic hardness assumptions
+and a partial synchrony network model~\cite{dwork1988consensus}.
+Our construction, \textsc{Snarc Axiom} (\textsc{Axiom} for short), maintains only two global state objects whose
+sizes are independent of transaction history:
+\begin{itemize}
+  \item \textbf{ACC}: a dynamic RSA accumulator over coin commitments---constant
+        256~bytes regardless of coin set size; and
+  \item \textbf{SpentSetRoot}: a Sparse Merkle Tree root over nullifier
+        hashes---constant 32~bytes, with the underlying set checkpointed and
+        archived separately.
+\end{itemize}
+These objects are finalized by a BFT committee producing threshold signatures
+over batched state transitions, yielding finalization certificates that replace
+ledger entries.
+A VDF beacon~\cite{pietrzak2019vdf,wesolowski2019vdf} constrains leader
+discretion in transaction ordering without requiring a trusted clock.
+
+\subsection{Contributions}
+
+\begin{itemize}
+  \item \textbf{C1 --- Ledgerless payment protocol.}
+    We define \textsc{Snarc Axiom} and prove that it achieves double-spend resistance,
+    value conservation, and full transaction anonymity without a global
+    transaction ledger as the canonical state repository, relying instead on
+    compact state objects and finalization certificates.
+
+  \item \textbf{C2 --- Formal security model.}
+    We provide a complete threat model, six cryptographic security definitions,
+    and proof sketches under standard assumptions: discrete logarithm hardness,
+    collision resistance, PRF security, RSA strong assumption, and SNARK
+    knowledge soundness~\cite{groth2016size,gabizon2019plonk}.
+
+  \item \textbf{C3 --- Atomic state transition with BFT finality.}
+    We define a deterministic State Transition Function $\mathsf{Apply}(S,B)
+    \to S'$ (\cref{sec:atomicity}) and prove it is atomic under the hybrid
+    BFT+VDF consistency sublayer~\cite{castro1999pbft}, replacing the
+    blockchain's role in ordering and finalizing state updates.
+    The threshold signature covers both the batch content and the resulting
+    state roots jointly, making partial observation impossible at the protocol
+    level.
+
+  \item \textbf{C4 --- Permissionless committee selection.}
+    We formalize VRF-based sortition~\cite{gilad2017algorand,rfc9381} with
+    stake-weighted admission (\cref{sec:committee}), proving sybil
+    non-amplification, expected committee size bounds, and compatibility with
+    the BFT safety threshold.
+
+  \item \textbf{C5 --- Spam and DoS resistance.}
+    We define a two-tier mempool architecture with three composable admission
+    mechanisms---stake tickets, PoW-lite hashcash, and VRF tickets---and prove
+    bounded verification work and spam cost dominance (\cref{sec:dos}).
+
+  \item \textbf{C6 --- Concrete instantiation and benchmarks.}
+    We instantiate \textsc{Axiom} with Groth16 over BLS12-381, RSA-2048
+    accumulator, BLS threshold signatures, and ECVRF (RFC~9381), providing
+    circuit constraint estimates, latency decomposition, throughput analysis,
+    and a phased implementation roadmap (\cref{sec:bench}).
+\end{itemize}
+
+\subsection{Comparison to Related Work}
+
+\textsc{Axiom}'s cryptographic core shares its nullifier-and-ZK-proof structure
+with Zerocash~\cite{ben2014zerocash} and Zcash~\cite{zcash2022protocol}.
+The key architectural departure is the elimination of the blockchain as state
+substrate: Zcash uses the chain as the nullifier set carrier and coin existence
+log, while \textsc{Axiom} replaces both with \textsf{ACC} and
+\textsf{SpentSetRoot} finalized by BFT threshold certificates.
+This direction parallels Utreexo~\cite{dryja2019utreexo}, which replaces
+Bitcoin's UTXO chain history with a compact accumulator---but applied to a
+privacy-preserving, ledgerless setting.
+The BFT finality and partial synchrony model follows
+Castro--Liskov~\cite{castro1999pbft} and
+Dwork--Lynch--Stockmeyer~\cite{dwork1988consensus}.
+Permissionless committee selection extends Algorand's VRF
+sortition~\cite{gilad2017algorand} with adaptive sizing and epoch rotation.
+VDF-based ordering follows Pietrzak~\cite{pietrzak2019vdf} and
+Wesolowski~\cite{wesolowski2019vdf}; for a unified treatment see
+Boneh~et~al.~\cite{boneh2018vdfsurvey}.
+
+\subsection{Paper Organization}
+
+Sections~\ref{sec:consistency}--\ref{sec:bench} present the protocol and
+analysis in order: the hybrid BFT+VDF consistency sublayer, accumulator
+atomicity, spam resistance, epoch rotation, permissionless committee selection,
+and concrete benchmarks.
+\Cref{sec:related} surveys related work and \cref{sec:conclusion} concludes.

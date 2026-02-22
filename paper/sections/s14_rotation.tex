@@ -1,0 +1,102 @@
+\subsection{Motivation}
+
+\Cref{sec:consistency} assumed a fixed validator set $V$.
+In practice, validators join or leave between epochs, keys must be rotated to
+maintain forward secrecy, and a static committee creates long-range attack
+exposure.
+This section formalizes epoch transitions and proves that safety and liveness
+are preserved across committee changes.
+
+\subsection{Epoch and Validator Set Model}
+
+\begin{definition}[Epoch]
+\[
+  \mathsf{Epoch}_e = (V_e,\; \mathit{vk}_e,\; T^e_{\mathrm{start}},\;
+  T^e_{\mathrm{end}},\; \mathit{seed}_e),
+\]
+where $V_e$ is the validator set, $\mathit{vk}_e$ the aggregated threshold
+verification key, and $\mathit{seed}_e$ the VDF beacon seed.
+The BFT parameters are $n_e = |V_e|$, $f_e < n_e/3$, and
+$t_e = \lfloor 2n_e/3 \rfloor + 1$.
+\end{definition}
+
+\subsection{Handoff MPC and Key Rotation}
+
+Key rotation proceeds in three in-epoch phases.
+
+\paragraph{Phase~1: DKG (first two-thirds of epoch~$e$).}
+$V_{e+1}$ runs a Distributed Key Generation protocol (e.g., Feldman
+VSS~\cite{feldman1987practical}) producing secret shares distributed among
+$V_{e+1}$ and public key $\mathit{vk}_{e+1}$.
+
+\paragraph{Phase~2: Handoff Certificate (last third of epoch~$e$).}
+\begin{equation}
+  \mathit{HC}_e = \mathsf{TSig}_{V_e}\!\left(
+    H\!\left(\mathit{vk}_{e+1} \;\|\; e{+}1 \;\|\;
+    S_{\mathrm{last},e}\right)\right).
+\end{equation}
+$\mathit{HC}_e$ certifies $\mathit{vk}_{e+1}$ and binds it to the last
+finalized state of epoch~$e$.
+
+\paragraph{Phase~3: Epoch transition.}
+The first batch of epoch~$e{+}1$ includes $\mathit{HC}_e$.
+Clients verify $\mathit{HC}_e$ before accepting signatures under
+$\mathit{vk}_{e+1}$.
+Members of $V_e$ delete their shares of $\mathit{sk}_e$ (best-effort forward
+secrecy).
+
+\subsection{Safety Across Rotation}
+
+\begin{theorem}[Epoch Transition Safety]\label{thm:rotation-safety}
+Under \cref{thm:safety}'s assumptions applied to both $V_e$ and $V_{e+1}$,
+the same nullifier $\mathit{sn}$ cannot be finalized in two different epochs.
+\end{theorem}
+\begin{proof}[Proof sketch]
+A transaction finalized in epoch~$e$ inserts $\mathit{sn}$ into
+$S_{\mathrm{last},e}.\mathsf{SpentSetRoot}$.
+The first batch of epoch~$e{+}1$ chains to $H(S_{\mathrm{last},e})$ (via
+$\mathit{prev\_hash}$) and $V_{e+1}$ checks non-membership against
+$S_{\mathrm{last},e}.\mathsf{SpentSetRoot}$.
+An adversary cannot present a forged $S_{\mathrm{last},e}$ because
+$\mathit{HC}_e$ is bound to the genuine last state and is unforgeable under
+TSig unforgeability (\cref{sec:consistency}).
+\end{proof}
+
+\subsection{Liveness Across Rotation}
+
+\begin{theorem}[Epoch Transition Liveness]\label{thm:rotation-liveness}
+If DKG completes and $\mathit{HC}_e$ is produced within epoch~$e$, then
+epoch~$e{+}1$ begins with a fully operational committee within $O(\Delta)$
+after $T^e_{\mathrm{end}}$.
+\end{theorem}
+
+\subsection{Long-Range Attack Resistance}
+
+\begin{definition}[Weak Subjectivity Window]
+Clients do not accept state assertions older than $W$ epochs without an
+out-of-band trusted checkpoint.
+\end{definition}
+
+\begin{theorem}[Long-Range Resistance]\label{thm:longrange}
+Rewriting state from epoch $e < \mathit{current} - W$ requires one of:
+(i) forging $\mathit{HC}_{e-1}$ (ruled out by TSig unforgeability), or
+(ii) solving $T_{\mathrm{beacon}}$ sequential VDF squarings per epoch
+(sequential hardness of VDF), or (iii) presenting a forged checkpoint
+(ruled out by the weak subjectivity assumption).
+\end{theorem}
+
+\subsection{Validator Churn Tolerance}
+
+\begin{definition}[Churn Rate]
+$\mathit{churn}_e = |V_e \mathbin{\triangle} V_{e+1}| / n$.
+\end{definition}
+
+\begin{theorem}[Churn Safety Bound]\label{thm:churn}
+If $|V_e \cap V_{e+1}|$ contains at least $t_e$ honest validators, then safety
+is preserved across the epoch boundary.
+\end{theorem}
+
+\begin{corollary}
+Maximum safe churn per epoch is $\mathit{churn}_e \leq 1/3$.
+Full committee replacement in a single epoch transition is unsafe.
+\end{corollary}

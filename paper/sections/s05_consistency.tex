@@ -1,0 +1,118 @@
+\subsection{Overview and Design Goals}
+
+\textsc{Axiom}'s cryptographic core requires no ledger; however, preventing
+double-spending requires that two global state objects remain consistent on a
+single history:
+\begin{itemize}
+  \item \textbf{SpentSet}: the append-only set of spent nullifiers; and
+  \item \textbf{ACC}: the accumulator state over valid coin commitments.
+\end{itemize}
+
+This section achieves the following guarantees without a global blockchain:
+\begin{itemize}
+  \item \textbf{G1 --- Safety.} The same nullifier $\mathit{sn}$ cannot be
+        finalized twice.
+  \item \textbf{G2 --- Atomicity.} When a transaction is finalized, the
+        $\mathit{sn}$ and $\mathit{cm\_new}$ updates are jointly final.
+  \item \textbf{G3 --- Liveness.} Valid transactions are eventually finalized
+        once the network stabilizes.
+  \item \textbf{G4 --- Weak Fairness.} No single actor can indefinitely censor
+        a specific transaction.
+\end{itemize}
+
+The hybrid design uses (A) a BFT Threshold Finality Layer for short-term
+ordering, atomicity, and finality, and (B) a VDF Time-Ordering Beacon for
+long-term ordering fairness and anti-censorship.
+
+\subsection{System Model}
+
+\begin{definition}[Partially Synchronous Network~\cite{dwork1988consensus}]
+There exists an unknown \emph{Global Stabilization Time} (GST) such that all
+messages sent after GST arrive within known bound~$\Delta$.
+\end{definition}
+
+\begin{definition}[Byzantine Validator Set]
+Of $n$ validators, at most $f < n/3$ are Byzantine (arbitrarily malicious).
+The BFT threshold is $t = \lfloor 2n/3 \rfloor + 1$.
+\end{definition}
+
+\begin{definition}[Threshold Signature Scheme]
+A $(t,n)$-TSS $= (\mathsf{KeyGen}, \mathsf{Sign}, \mathsf{Combine},
+\mathsf{Verify})$ produces a valid aggregated signature if and only if at least
+$t$ honest shares are combined.
+\end{definition}
+
+\subsection{VDF Time-Ordering Beacon}
+
+\begin{definition}[VDF~\cite{pietrzak2019vdf,wesolowski2019vdf}]
+$\mathsf{VDF} = (\mathsf{Setup}, \mathsf{Eval}, \mathsf{Verify})$ satisfies:
+\begin{itemize}
+  \item \emph{Sequentiality}: $\mathsf{Eval}(x, T) \to (y, \pi)$ requires
+        exactly $T$ sequential steps.
+  \item \emph{Uniqueness}: each $x$ yields a unique valid $y$.
+  \item \emph{Efficient verification}: $\mathsf{Verify}(x,y,\pi,T) = 1$ in
+        $O(\log T)$.
+\end{itemize}
+\end{definition}
+
+Each epoch's VDF beacon seed is:
+\[
+  \mathit{seed}_{e+1} = H\!\left(\mathit{seed}_e \;\|\;
+  \mathsf{VDF}(\mathit{seed}_e, T_{\mathrm{vdf}}) \;\|\;
+  H(B_{\mathrm{last},e})\right).
+\]
+Every transaction receives a deterministic priority key
+$\mathit{prio}(\mathit{TX}) = H(\mathit{sn} \| \mathit{cm\_new} \|
+y_e)$, constraining leader discretion without a trusted clock.
+
+\subsection{BFT Threshold Finality Protocol}
+
+Each epoch, a leader proposes a batch:
+\[
+  B_k = (\mathit{epoch}, k, \mathit{prev\_hash}, \mathit{tx\_list},
+         y_e, \pi_{\mathrm{vdf}}).
+\]
+Validators (i) verify the VDF output, (ii) verify each ZK proof in
+$\mathit{tx\_list}$, and (iii) check nullifier non-membership against
+$S_{k-1}.\mathsf{SpentSetRoot}$.
+Upon collecting $\sigma_k = \mathsf{TSig}_{t}(H(B_k))$, the batch is final and
+the state is updated atomically (\cref{sec:atomicity}).
+
+\subsection{Safety and Liveness}
+
+\begin{theorem}[Safety]\label{thm:safety}
+With $f < n/3$ Byzantine validators and a correct BFT protocol, no two distinct
+accepted batches can contain transactions sharing the same nullifier~$\mathit{sn}$.
+\end{theorem}
+\begin{proof}[Proof sketch]
+Two conflicting batches each require $t$ signatures.
+Any two quorums of size $t$ over $n = 3f+1$ validators share at least $f+1$
+nodes; at least one is honest.
+An honest validator refuses to sign a batch containing a nullifier already
+present in the committed $\mathsf{SpentSetRoot}$, or a duplicate within the
+batch.
+Hence two conflicting finals are impossible.
+\end{proof}
+
+\begin{theorem}[Liveness]\label{thm:liveness}
+After GST, every valid transaction submitted by an honest sender is finalized
+within $O(T_{\mathrm{beacon}} + \kappa\Delta)$ time, where $\kappa$ is a small
+BFT-protocol constant.
+\end{theorem}
+\begin{proof}[Proof sketch]
+After GST, messages arrive within $\Delta$; BFT protocols of the HotStuff
+class~\cite{castro1999pbft} terminate in $O(\Delta)$ rounds under an eventually
+honest leader.
+VDF evaluation completes in $T_{\mathrm{beacon}}$ before epoch end.
+\end{proof}
+
+\subsection{Weak Fairness via VDF Ordering}
+
+Validators soft-enforce that the leader's batch ordering respects
+$\mathit{prio}(\cdot)$.
+Systematic deviation constitutes \emph{provable misbehavior}: at least $f+1$
+honest validators observe the violation and can initiate a slashing or
+reputation penalty.
+This does not guarantee full censorship-resistance, but raises the cost of
+sustained censorship to the level of observable, attributable protocol
+violation.

@@ -1,0 +1,118 @@
+\subsection{Motivation}
+
+\textsc{Axiom}'s cryptographic core guarantees transaction correctness but
+imposes no economic friction on transaction \emph{submission}.
+Without such friction, a PPT adversary may mount:
+mempool flooding, ZK-verify exhaustion, state bloat, or
+censorship-by-congestion.
+This section defines an anti-spam sublayer that is composable with both
+semi-permissioned and fully permissionless admission models.
+
+\subsection{Design Principles}
+
+\begin{itemize}
+  \item \textbf{P1 (Early Reject).} The most expensive check (ZK verify) is
+        performed last.
+  \item \textbf{P2 (Sender Pays).} The party generating network load bears its
+        cost.
+  \item \textbf{P3 (Bounded Admission).} Per-epoch transaction count has a
+        deterministic upper bound $M_{\max}$.
+  \item \textbf{P4 (Punish Proven Abuse).} Provable spam triggers
+        stake-credit burning or admission banning.
+  \item \textbf{P5 (Composable).} Mechanisms work under both stake-based and
+        fully open admission.
+\end{itemize}
+
+\subsection{Two-Tier Mempool}
+
+Incoming envelopes $\mathit{TX}^* = (\mathit{TX}, \mathit{fee},
+\mathit{anti\_replay}, \mathit{admission\_proof})$ are processed in two tiers.
+
+\paragraph{Tier~0 (Cheap).}
+In order: (1) size and format bounds; (2) admission proof verification; (3) fee
+floor $\mathit{fee} \geq f_{\min}(\mathit{epoch})$; (4) nullifier shape
+check; (5) duplicate suppression via $(sn, cm\_new)$ hash cache.
+Failure at any step causes immediate drop---no ZK verification is invoked.
+
+\paragraph{Tier~1 (Expensive).}
+Only for Tier~0 survivors: (6) $\mathsf{ZKVerify}(\pi, \mathsf{ACC}, sn,
+cm\_new)$; (7) $\mathsf{NonMember}(\mathsf{SpentSetRoot}, H(sn))$; (8)
+intra-batch conflict check (leader).
+
+\subsection{Admission Mechanisms}
+
+Three composable mechanisms are available; deployments choose one or more.
+
+\begin{definition}[Stake Ticket (Mechanism~A)]
+A user depositing $\mathit{stake}_u$ tokens receives a per-epoch quota:
+\[
+  \mathit{quota}_u(e) = \lfloor \mathit{stake}_u / \mathit{stake\_unit} \rfloor.
+\]
+Each submitted $\mathit{TX}^*$ consumes one ticket
+$\mathit{ticket}_{id} = H(\mathit{pk}_u \| e \| \mathit{ctr})$.
+Double-use is detected via a per-epoch SMT ticket registry.
+\end{definition}
+
+\begin{definition}[PoW-lite / Hashcash (Mechanism~B)]
+For permissionless entry, the sender finds a nonce such that:
+\[
+  H(e \| \mathit{TX} \| \mathit{nonce}) < 2^{-d(e)},
+\]
+where $d(e)$ is the epoch difficulty parameter, adjusted dynamically based on
+mempool pressure.
+Verification cost: one hash evaluation.
+Expected production cost: $2^{d(e)}$ hash evaluations.
+\end{definition}
+
+\begin{definition}[VRF Ticket (Mechanism~C)]
+The sender evaluates:
+\[
+  \mathit{ticket} = \mathsf{VRF}.\mathsf{Eval}(\mathit{sk},\;
+  \mathit{seed}_e \| H(\mathit{TX})),
+\]
+and is admitted if $H(\mathit{ticket}) < \tau_{\mathit{tx}}(e)$.
+This provides probabilistic admission without wasting CPU, and integrates
+naturally with the epoch sortition beacon (\cref{sec:committee}).
+\end{definition}
+
+\subsection{Fee Market and Batch Selection}
+
+The leader selects admitted transactions by:
+\[
+  \mathit{score}(\mathit{TX}^*) = \mathit{fee} / \mathit{bytes},
+\]
+with ties broken by the VDF priority key $\mathit{prio}(\mathit{TX})$.
+Batch caps $M_{\max}(e)$ and $B_{\max}(e)$ are enforced deterministically.
+
+\subsection{Formal Properties}
+
+\begin{theorem}[Bounded Verification Work]\label{thm:dos-bounded}
+Let $R_0$ be the Tier~0 pass rate.
+The expected number of expensive (Tier~1) verifications per unit time is at
+most $R_0 \cdot \mathit{CAP}_{\max}$, and $R_0$ is upper-bounded by the
+adversary's resource expenditure under any active admission mechanism.
+\end{theorem}
+
+\begin{theorem}[Spam Cost Dominance]\label{thm:dos-cost}
+For parameters $(\mathit{stake\_unit}, d(e), \tau_{\mathit{tx}}(e),
+f_{\min}(e))$ chosen such that the expected cost of passing Tier~0 exceeds
+$\alpha \cdot C_{\mathit{verify}}$ for some $\alpha > 1$, sustained
+Tier~1-targeting spam is economically dominated.
+\end{theorem}
+
+\begin{theorem}[Batch Bloat Resistance]\label{thm:dos-bloat}
+Per-epoch state growth satisfies:
+\[
+  \Delta|\mathsf{SpentSet}| \leq M_{\max},\quad
+  \Delta\mathsf{ACC\_updates} \leq M_{\max}.
+\]
+State growth rate is a controlled system parameter, not adversary-controlled.
+\end{theorem}
+
+\subsection{Honest Disclosure}
+
+DoS is made \emph{costly}, not impossible.
+A nation-state-level bandwidth adversary can flood the network layer; this
+requires out-of-scope network-level mitigations.
+Fee token economics and VRF sybil resistance are deployment concerns not fully
+specified here.

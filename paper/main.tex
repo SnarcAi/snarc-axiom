@@ -1,0 +1,146 @@
+\documentclass[10pt,twocolumn]{article}
+
+% --- Page geometry ---
+\usepackage[margin=0.75in]{geometry}
+
+% --- Fonts ---
+\usepackage[T1]{fontenc}
+
+
+% --- Math and theorems ---
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{remark}[theorem]{Remark}
+
+% --- Tables ---
+\usepackage{booktabs}
+\usepackage{multirow}
+
+% --- Figures ---
+\usepackage{graphicx}
+
+% --- Hyperlinks (load before cleveref) ---
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+% Custom cleveref names
+\crefname{theorem}{Theorem}{Theorems}
+\crefname{lemma}{Lemma}{Lemmas}
+\crefname{definition}{Definition}{Definitions}
+\crefname{corollary}{Corollary}{Corollaries}
+\crefname{section}{Section}{Sections}
+
+% --- Code listings ---
+\usepackage{listings}
+\usepackage{xcolor}
+
+\definecolor{codegreen}{rgb}{0.2,0.5,0.2}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codeblue}{rgb}{0.1,0.1,0.7}
+
+\lstset{
+  basicstyle    = \ttfamily\footnotesize,
+  keywordstyle  = \color{codeblue}\bfseries,
+  commentstyle  = \color{codegreen},
+  numberstyle   = \tiny\color{codegray},
+  breaklines    = true,
+  frame         = single,
+  columns       = fullflexible,
+  keepspaces    = true
+}
+
+% --- Miscellaneous ---
+   % better line breaks
+\usepackage{parskip}     % paragraph spacing instead of indent
+
+% ============================================================
+%  TITLE
+% ============================================================
+\title{%
+  {\textbf{SNARC AXIOM: Ledgerless Privacy-Preserving Payments}}\\
+  \textbf{via Accumulators, Nullifier Roots,}\\
+  \textbf{and Hybrid BFT\,+\,VDF Finality}%
+}
+\author{Anonymous Authors}
+\date{}
+
+% ============================================================
+%  DOCUMENT
+% ============================================================
+\begin{document}
+
+\maketitle
+
+% ---------- Abstract ----------
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+% ---------- Introduction ----------
+\input{sections/intro}
+
+% ---------- Notation / Preliminaries ----------
+\section{Notation and Preliminaries}
+\label{sec:prelim}
+\input{sections/s02_prelim}
+
+% ---------- Threat Model ----------
+\section{Threat Model}
+\label{sec:threat}
+\input{sections/s03_threat}
+
+% ---------- Protocol Overview + ZK Relation ----------
+\section{Protocol Overview and Transaction Validity}
+\label{sec:protocol}
+\input{sections/s04_protocol}
+
+% ---------- Core sections ----------
+
+\section{State Consistency Without a Ledger}
+\label{sec:consistency}
+\input{sections/s05_consistency}
+
+\section{ACC Update Atomicity}
+\label{sec:atomicity}
+\input{sections/s12_atomicity}
+
+\section{Spam and DoS Resistance}
+\label{sec:dos}
+\input{sections/s13_dos}
+
+\section{Epoch Rotation and Committee Freshness}
+\label{sec:rotation}
+\input{sections/s14_rotation}
+
+\section{Permissionless Committee Selection}
+\label{sec:committee}
+\input{sections/s15_committee}
+
+\section{Concrete Instantiations and Benchmarks}
+\label{sec:bench}
+\input{sections/s16_benchmarks}
+
+\section{Security Policy and Responsible Deployment}
+\label{sec:policy}
+\input{sections/s17_security_policy}
+
+% ---------- Related Work ----------
+\section{Related Work}
+\label{sec:related}
+\input{sections/related}
+
+% ---------- Conclusion ----------
+\section{Conclusion}
+\label{sec:conclusion}
+\input{sections/conclusion}
+
+% ---------- References ----------
+\bibliographystyle{abbrv}
+\bibliography{axiom}
+
+\end{document}

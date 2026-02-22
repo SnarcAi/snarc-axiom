@@ -1,0 +1,179 @@
+\documentclass[sigconf,anonymous,review]{acmart}
+
+% ============================================================
+%  ACM / CCS configuration
+% ============================================================
+\settopmatter{printfolios=true}   % page numbers in review mode
+\setcopyright{none}               % suppress copyright box for review
+
+% --- Math / theorems ---
+\usepackage{amsmath,amsthm,mathtools}
+\usepackage{savesym}
+\savesymbol{Bbbk}
+\usepackage{amssymb}
+\restoresymbol{AMSb}{Bbbk}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{remark}[theorem]{Remark}
+
+% --- Tables / figures ---
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{graphicx}
+
+% --- Float barrier (eliminates float warnings) ---
+\usepackage{placeins}
+
+% --- Cross-references (load after hyperref; acmart loads hyperref) ---
+\usepackage[nameinlink,noabbrev]{cleveref}
+\crefname{theorem}{Theorem}{Theorems}
+\crefname{lemma}{Lemma}{Lemmas}
+\crefname{definition}{Definition}{Definitions}
+\crefname{corollary}{Corollary}{Corollaries}
+\crefname{section}{Section}{Sections}
+
+% --- Code listings ---
+\usepackage{listings}
+\usepackage{xcolor}
+\lstset{
+  basicstyle  = \ttfamily\footnotesize,
+  breaklines  = true,
+  frame       = single,
+  columns     = fullflexible,
+  keepspaces  = true
+}
+
+% ============================================================
+%  CCS Concepts
+% ============================================================
+\begin{CCSXML}
+<ccs2012>
+ <concept>
+  <concept_id>10002978.10003022.10003026</concept_id>
+  <concept_desc>Security and privacy~Cryptography</concept_desc>
+  <concept_significance>500</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10002978.10003022.10003025</concept_id>
+  <concept_desc>Security and privacy~Distributed systems security</concept_desc>
+  <concept_significance>300</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>10002978.10002986.10002990</concept_id>
+  <concept_desc>Theory of computation~Interactive proof systems</concept_desc>
+  <concept_significance>300</concept_significance>
+ </concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Security and privacy~Cryptography}
+\ccsdesc[300]{Security and privacy~Distributed systems security}
+\ccsdesc[300]{Theory of computation~Interactive proof systems}
+
+% ============================================================
+%  Title, author, keywords
+% ============================================================
+\title{SNARC AXIOM: Ledgerless Privacy-Preserving Payments via
+       Accumulators, Nullifier Roots, and Hybrid BFT+VDF Finality}
+
+\author{Anonymous Author(s)}
+\affiliation{%
+  \institution{Anonymous Institution}
+  \country{Anonymous Country}
+}
+\email{anonymous@anonymous.invalid}
+
+\keywords{privacy, zero-knowledge proofs, accumulators, nullifiers,
+          Byzantine fault tolerance, verifiable delay functions,
+          ledgerless payments, double-spend prevention}
+
+% ============================================================
+%  Document
+% ============================================================
+\begin{document}
+
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+\maketitle
+
+% ---- Intro (contains \section{Introduction} internally) ----
+\input{sections/intro}
+
+% ---- Notation / Preliminaries ----
+\section{Notation and Preliminaries}
+\label{sec:prelim}
+\input{sections/s02_prelim}
+\FloatBarrier
+
+% ---- Threat Model ----
+\section{Threat Model}
+\label{sec:threat}
+\input{sections/s03_threat}
+\FloatBarrier
+
+% ---- Protocol Overview + ZK Relation ----
+\section{Protocol Overview and Transaction Validity}
+\label{sec:protocol}
+\input{sections/s04_protocol}
+\FloatBarrier
+
+% ============================================================
+%  Core protocol sections
+% ============================================================
+
+\section{State Consistency Without a Ledger}
+\label{sec:consistency}
+\input{sections/s05_consistency}
+\FloatBarrier
+
+\section{ACC Update Atomicity}
+\label{sec:atomicity}
+\input{sections/s12_atomicity}
+\FloatBarrier
+
+\section{Spam and DoS Resistance}
+\label{sec:dos}
+\input{sections/s13_dos}
+\FloatBarrier
+
+\section{Epoch Rotation and Committee Freshness}
+\label{sec:rotation}
+\input{sections/s14_rotation}
+\FloatBarrier
+
+\section{Permissionless Committee Selection}
+\label{sec:committee}
+\input{sections/s15_committee}
+\FloatBarrier
+
+\section{Concrete Instantiations and Benchmarks}
+\label{sec:bench}
+\input{sections/s16_benchmarks}
+\FloatBarrier
+
+\section{Security Policy and Responsible Deployment}
+\label{sec:policy}
+\input{sections/s17_security_policy}
+\FloatBarrier
+
+% ============================================================
+%  Related work, conclusion, references
+% ============================================================
+
+\section{Related Work}
+\label{sec:related}
+\input{sections/related}
+
+\section{Conclusion}
+\label{sec:conclusion}
+\input{sections/conclusion}
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{axiom}
+
+\end{document}

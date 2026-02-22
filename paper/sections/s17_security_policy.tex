@@ -1,0 +1,209 @@
+This section addresses responsible deployment of \textsc{Snarc Axiom},
+independent of the cryptographic security proofs in preceding sections.
+Cryptographic soundness is a necessary but not sufficient condition for safe
+deployment of a financial protocol.
+The policies below bound the impact of any failure---whether cryptographic,
+implementation, or operational---and define the conditions under which the
+system escalates, freezes, or migrates.
+
+\subsection{Deployment Tiers}
+
+\textsc{Snarc Axiom} is defined across three deployment tiers with strictly
+increasing security requirements and value exposure.
+
+\paragraph{Tier~0 --- Researchnet (v1).}
+The protocol described in this paper.
+Instantiation: Groth16 + RSA-2048 + stake-VRF BFT.
+Coins carry no monetary value.
+Purpose: academic analysis, benchmark collection, circuit validation, and
+adversarial testing.
+\emph{No real-value assets are issued or redeemable under Tier~0.}
+
+\paragraph{Tier~1 --- Testnet (v2).}
+Universal-setup or setup-free proof system (PLONK/Halo2).
+Hybrid PoW-lite + stake committee admission.
+Value caps enforced at the protocol level (see \cref{sec:policy-caps}).
+Independent security audit required before any value-bearing token launch.
+Bug bounty active.
+
+\paragraph{Tier~2 --- Mainnet (v3).}
+Setup-free proof system (STARKs or equivalent).
+Post-quantum signatures (e.g., Dilithium/Falcon) for committee TSig.
+PQ-resistant accumulator (hash-based state proof or class-group accumulator).
+Multi-audit and formal verification of critical modules.
+Full regulatory and legal review per jurisdiction.
+\emph{Only Tier~2 is suitable for production monetary value.}
+
+\subsection{Cryptographic Agility}
+
+All cryptographic components are treated as plug-in modules behind stable
+interfaces:
+
+\begin{itemize}
+  \item \textbf{Proof system}: $\Pi.\{\mathsf{Setup}, \mathsf{Prove},
+        \mathsf{Verify}\}$ — replaceable without changing the ZK relation
+        $\mathcal{R}$ constraints.
+  \item \textbf{Accumulator}: $\mathsf{ACC}.\{\mathsf{Update},
+        \mathsf{VerifyMem}\}$ — RSA-2048 $\to$ class-group $\to$
+        hash-based, migrated via epoch transition (\cref{sec:rotation}).
+  \item \textbf{Threshold signature}: BLS12-381 $\to$ lattice-based TSig,
+        swapped during a scheduled epoch rotation.
+  \item \textbf{Hash / PRF}: BLAKE3/Poseidon $\to$ SHA-3 family or
+        SPHINCS-compatible; parameter-upgradeable.
+\end{itemize}
+
+A migration between tiers is executed as a coordinated epoch transition
+(\cref{sec:rotation}) with a mandatory overlap period of at least $W$~epochs
+(weak subjectivity window) during which both the old and new proof systems
+are accepted.
+
+\subsection{Threat Escalation and Freeze Policy}
+
+Three escalation levels are defined based on observed or credible threat
+signals.
+
+\paragraph{Level~1 --- Yellow (Monitor).}
+Trigger: published theoretical attack, unconfirmed anomaly, or unusual
+on-chain pattern detected by monitoring.
+Response: increase audit frequency; convene security committee within 24~h;
+prepare freeze parameters; no operational change yet.
+
+\paragraph{Level~2 --- Orange (Restrict).}
+Trigger: credible proof-of-concept exploit reported, or anomalous state
+growth/nullifier collision rate exceeding $3\sigma$ baseline.
+Response: (i) halt \emph{MintTx} and \emph{BurnTx} immediately;
+(ii) reduce per-epoch batch cap $M_{\max}$ to 10\% of normal;
+(iii) notify all validators and auditors;
+(iv) begin emergency migration preparation.
+
+\paragraph{Level~3 --- Red (Full Freeze).}
+Trigger: confirmed exploit, double-finalization observed, or trusted-setup
+compromise credibly demonstrated.
+Response: (i) halt all \emph{SpendTx}, \emph{MintTx}, and
+\emph{BurnTx}; (ii) only \emph{read-only} state queries remain live;
+(iii) publish incident report within 6~h; (iv) initiate emergency migration
+or coordinated shutdown.
+
+The freeze condition is enforced by the BFT committee via a threshold-signed
+\emph{HaltTx}: any $t$-of-$n$ validator quorum can issue a halt, and no
+validator will sign new batch proposals until a validated \emph{ResumeTx}
+(also requiring $t$-of-$n$ threshold authorization) is produced.
+\emph{HaltTx and ResumeTx do not confer any ability to reassign coin
+ownership; they only suspend and resume state transitions under threshold
+authorization.}
+Neither transaction can move funds, alter accumulator witnesses, or modify
+the SpentSet; the $\mathsf{Apply}$ function is simply not called until
+\emph{ResumeTx} is finalized.
+
+\subsection{Value Caps}
+\label{sec:policy-caps}
+
+Any Tier~1 deployment must enforce the following, with the enforcement
+mechanism explicitly specified:
+
+\begin{itemize}
+  \item \textbf{Per-transaction cap} ($v \leq V_{\max}^{\mathit{tx}}$):
+        enforced \emph{in-circuit} as a range constraint over the committed
+        value field.
+        The ZK proof is unsatisfiable for any $v > V_{\max}^{\mathit{tx}}$;
+        no trusted party can override this.
+
+  \item \textbf{Per-epoch issuance cap}
+        ($\sum_{\mathit{MintTx} \in B_k} v_i \leq
+        V_{\max}^{\mathit{epoch}}$):
+        enforced as a \emph{committee validation rule}.
+        Validators maintain a per-epoch issuance counter in the batch
+        proposal; honest validators reject any proposal exceeding the cap.
+        The counter is included in the threshold-signed finalization object
+        $C_k$ and is therefore auditable.
+
+  \item \textbf{Total outstanding supply cap}
+        ($\sum_{\mathit{cm} \in \mathsf{ACC}} v_{\mathit{cm}} \leq
+        V_{\max}^{\mathit{total}}$):
+        enforced as a \emph{committee validation rule} backed by an
+        accumulator-derived supply counter in $S_k$.
+        As with the epoch cap, honest validators reject proposals that would
+        push the counter above $V_{\max}^{\mathit{total}}$.
+
+  \item \textbf{Redemption gate}: BurnTx is disabled by default;
+        enabled only after explicit audit sign-off per deployment.
+        The gate is a committee rule, not a circuit constraint, because
+        enabling it requires no change to the ZK circuit.
+\end{itemize}
+
+\subsection{Audit and Bug Bounty Requirements}
+
+\paragraph{Tier~0.}
+Internal review only.
+Open-source release with explicit ``experimental, no value'' label.
+
+\paragraph{Tier~1.}
+Minimum two independent external security audits of:
+(i) the ZK circuit and relation $\mathcal{R}$;
+(ii) the BFT + VDF finality sublayer;
+(iii) the admission and spam-resistance layer.
+Bug bounty active from day~1 of public testnet; severity-tiered rewards.
+
+\paragraph{Tier~2.}
+All Tier~1 requirements plus:
+formal verification of the \textsf{Apply} state transition function
+(\cref{thm:atomicity}) using a proof assistant (e.g., Coq, Lean);
+hardware wallet and side-channel audit;
+jurisdiction-specific legal review.
+
+\subsection{Quantum Threat Timeline and Migration Trigger}
+
+The v1 cryptographic components (Groth16, RSA-2048, BLS12-381) are not
+post-quantum secure.
+A sufficiently large fault-tolerant quantum computer would break them via
+Shor's algorithm.
+Current consensus among cryptographers places such a machine at 10--20+
+years away for cryptographically relevant scale, though this estimate
+carries significant uncertainty.
+
+Migration triggers are defined as \emph{externally verifiable events}, not
+subjective forecasts, to ensure objective escalation without reliance on
+any single party's judgment:
+
+\begin{enumerate}
+  \item \textbf{Standards milestone}: NIST formally deprecates RSA-2048 or
+        elliptic-curve cryptography for near-term use (e.g., via a FIPS
+        revision or sunset advisory with a fixed end-of-life date).
+
+  \item \textbf{Community consensus}: A reproducible break or significant
+        speedup against discrete-log or factoring is documented in a
+        peer-reviewed publication at a major venue (IEEE S\&P, CCS, Crypto,
+        Eurocrypt) and independently confirmed by at least one other research
+        group.
+
+  \item \textbf{Practical break}: A publicly reproducible demonstration
+        breaks a concrete instance of BLS12-381 DL, RSA-2048 factoring, or
+        the Groth16 proof system at any key size used in the deployment.
+\end{enumerate}
+
+On any trigger, Level~2 (Orange) is declared within 24~hours, and the
+migration to a setup-free, PQ-resistant configuration (Tier~2) begins under
+the epoch rotation protocol (\cref{sec:rotation}).
+Trigger conditions are defined as externally verifiable events (standards
+milestones or publicly reproducible breaks), not subjective forecasts.
+
+\subsection{Responsibility Allocation}
+
+This paper describes a cryptographic protocol design.
+Responsibility allocation for production deployments is as follows:
+
+\begin{itemize}
+  \item \textbf{Protocol authors}: specification correctness; honest
+        disclosure of limitations (this section and \cref{sec:conclusion}).
+  \item \textbf{Implementers}: correctness of the implementation against the
+        specification; side-channel hardening; wallet security.
+  \item \textbf{Operators}: audit compliance; value-cap enforcement;
+        incident response execution; regulatory compliance.
+  \item \textbf{Users}: understanding the risk tier of the deployment they
+        use; not exceeding their own risk tolerance.
+\end{itemize}
+
+\noindent\textit{No deployment of \textsc{Snarc Axiom} at any tier carries
+an implied guarantee of security or suitability for any particular use.
+The protocol is provided as a research artifact under open-source terms.
+Use at own risk.}

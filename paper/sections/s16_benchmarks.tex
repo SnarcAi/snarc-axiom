@@ -1,0 +1,139 @@
+\subsection{Component Choices}
+
+\paragraph{ZK proof system.}
+We instantiate with Groth16~\cite{groth2016size} over BLS12-381 as the default
+(smallest proof size, fastest verification).
+PLONK~\cite{gabizon2019plonk} is the recommended upgrade path (universal
+trusted setup, circuit-agnostic).
+STARKs are noted for post-quantum scenarios at the cost of larger proofs
+(${\sim}100$~KB).
+
+\paragraph{Accumulator.}
+RSA-2048 accumulator with batch witness updates~(Boneh~et~al.~2019).
+$H'$ maps to primes via deterministic probable-prime search.
+Alternative: class-group accumulator (no trusted setup; 3--5$\times$ slower).
+
+\paragraph{Commitment scheme.}
+Pedersen commitments over BLS12-381 $\mathbb{G}_1$:
+$\mathsf{Com}(v;\, r) = v \cdot G + r \cdot H$.
+
+\paragraph{PRF and hash.}
+$\mathsf{PRF}_s(\rho) = \mathsf{BLAKE3}(s \| \rho)$ (circuit-external);
+Poseidon hash inside ZK circuits for efficient constraint generation.
+
+\paragraph{Threshold signature.}
+BLS threshold signatures over BLS12-381.
+Aggregated signature size: 48~bytes (constant in~$n$).
+Verification: 2 pairings $\approx 3$~ms.
+
+\paragraph{VDF.}
+Wesolowski VDF~\cite{wesolowski2019vdf} with 2048-bit RSA modular squaring.
+$T = 4{,}000$ squarings $\approx 2$~seconds on a single CPU core.
+Verification $\approx 5$~ms.
+
+\paragraph{VRF.}
+ECVRF over Ed25519 per RFC~9381~\cite{rfc9381}.
+
+\subsection{ZK Circuit Estimate}
+
+\begin{table}[!t]
+\centering
+\caption{Approximate R1CS constraint counts for relation~$\mathcal{R}$.}
+\label{tab:constraints}
+\begin{tabular}{lr}
+\toprule
+\textbf{Constraint source} & \textbf{R1CS constraints} \\
+\midrule
+Pedersen commitment ($\times 2$) & 500 \\
+Poseidon hash ($\times 3$) & 1{,}200 \\
+PRF / BLAKE3 (Poseidon substitute) & 800 \\
+RSA membership witness verify & 15{,}000 \\
+Value range proof & 500 \\
+\midrule
+\textbf{Total} & $\mathbf{\approx 18{,}000}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Estimated proving times (Groth16, 18K R1CS):
+RTX~4090: $\approx 400$~ms;\quad
+RTX~5090: $\approx 200$~ms;\quad
+Server FPGA: $\approx 50$~ms.
+
+\subsection{End-to-End Latency}
+
+\[
+  T_{\mathit{total}} = \underbrace{T_{\mathit{prove}}}_{\text{200--400 ms}}
+  + \underbrace{T_{\mathit{net}}}_{100\text{--}500\text{ ms}}
+  + \underbrace{T_{\mathit{wait}}}_{0\text{--}T_e/2}
+  + \underbrace{T_{\mathit{bft}}}_{300\text{--}600\text{ ms}}
+  + \underbrace{T_{\mathit{confirm}}}_{{\approx}100\text{ ms}}.
+\]
+Best case: $\approx 1$--$2$~s.\quad High-load case: $\approx 3$--$5$~s.
+
+\subsection{Throughput Analysis}
+
+Reference validator: RTX~4090, 32-core CPU, 10~Gbps NIC.
+
+\begin{itemize}
+  \item GPU parallel ZK verify: $\approx 500$~proofs/s (Groth16, BLS12-381).
+  \item Batch cap: $M_{\max} = 300$~TX/batch (conservative).
+  \item Epoch duration: $T_e = 5$~s.
+  \item Throughput: $300 / 5 = \mathbf{60}$~\textbf{TPS} (single committee).
+\end{itemize}
+
+BFT message complexity grows as $O(n^2)$; threshold signature aggregation
+keeps finalization bandwidth at $O(n)$ (48-byte shares, one aggregated
+signature).
+Recommended committee size: $n = 100$--$300$.
+
+\subsection{State Growth}
+
+\begin{itemize}
+  \item SpentSet: $300 \times 17{,}280 \times 365 \approx 1.9 \times 10^9$
+        entries/year; at 32~bytes/leaf $\approx 60$~GB/year full set.
+  \item Light client: $\mathsf{SpentSetRoot}$ (32~bytes) +
+        non-membership proof ($\approx 1$~KB); trivial.
+  \item RSA Accumulator value: constant 256~bytes.
+  \item Pruning: entries older than $W$ epochs ($\approx 90$~days) are
+        archived; light clients verify against current epoch snapshot.
+\end{itemize}
+
+\subsection{Comparison}
+
+\begin{table}[!t]
+\centering
+\caption{System comparison on key axes.}
+\label{tab:compare}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{System} & \textbf{Finality} & \textbf{TPS} & \textbf{Privacy}
+  & \textbf{Energy} & \textbf{Ledger} \\
+\midrule
+Bitcoin  & ${\sim}60$~min & 7   & Weak & High & Yes \\
+Ethereum & ${\sim}15$~s   & 15--30 & Weak & Low  & Yes \\
+Zcash    & ${\sim}75$~s   & ${\sim}10$ & Full & Low  & Yes \\
+Algorand & ${\sim}4.5$~s  & ${\sim}1000$ & Weak & Low  & Yes \\
+\textbf{AXIOM} & \textbf{2--5~s} & \textbf{${\sim}60^*$} & \textbf{Full}
+  & \textbf{Minimal} & \textbf{No} \\
+\bottomrule
+\end{tabular}
+{\footnotesize ${}^*$ single committee, reference hardware; horizontal
+scaling possible.}
+\end{table}
+
+\subsection{Implementation Roadmap}
+
+\begin{enumerate}
+  \item \textbf{Phase~1} (3--6 mo): Groth16 circuit (\texttt{arkworks-rs}),
+        RSA accumulator, BLS TSig.
+  \item \textbf{Phase~2} (3 mo): Single-node prototype; SMT SpentSet;
+        \textsf{Apply()} state transition; benchmarks.
+  \item \textbf{Phase~3} (6 mo): Multi-node BFT; VDF beacon; DKG key
+        rotation; network stress test.
+  \item \textbf{Phase~4} (3 mo): Tier~0/1 mempool; PoW-lite + stake tickets;
+        dynamic fee market.
+  \item \textbf{Phase~5} (3 mo): ECVRF sortition; adaptive $\tau$; sybil
+        audit.
+\end{enumerate}
+Total estimated duration: 18--24 months (small team, production-grade target).

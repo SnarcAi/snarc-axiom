@@ -1,0 +1,125 @@
+\subsection{Motivation}
+
+\Cref{sec:consistency} guarantees that the same nullifier cannot be finalized
+twice.
+A complementary guarantee is required: when a batch is finalized, both the
+accumulator update and the nullifier insertion succeed together, or neither
+takes effect.
+This section formalizes that guarantee.
+
+\subsection{State and Transition Function}
+
+\begin{definition}[Global State]
+\[
+  S = (\mathsf{ACC},\; \mathsf{SpentSetRoot},\; \mathit{epoch},\; \mathit{seq})
+\]
+where $\mathsf{ACC} \in \mathbb{Z}_N^*$ is the RSA accumulator value and
+$\mathsf{SpentSetRoot} \in \{0,1\}^\lambda$ is the Sparse Merkle Tree root
+over hashed nullifiers.
+The genesis state is $S_0 = (g, \bot, 0, 0)$.
+\end{definition}
+
+\begin{definition}[Batch]
+\[
+  B_k = (\mathit{epoch},\; k,\; \mathit{prev\_hash},\; \mathit{tx\_list},\;
+         \sigma)
+\]
+where $\mathit{tx\_list} = [\mathit{TX}_1,\ldots,\mathit{TX}_m]$,
+$\mathit{TX}_i = (\mathit{sn}_i, \mathit{cm\_new}_i, \pi_i)$, and
+$\sigma = \mathsf{TSig}(H(B_k \setminus \sigma))$.
+\end{definition}
+
+\begin{definition}[State Transition Function]
+$\mathsf{Apply}(S, B_k) = S'$ if and only if all six preconditions hold:
+\begin{enumerate}
+  \item $B_k.\mathit{prev\_hash} = H(S)$.
+  \item $B_k.\mathit{seq} = S.\mathit{seq} + 1$.
+  \item $\mathsf{TSig.Verify}(\mathit{vk},\, H(B_k \setminus \sigma),\,
+        \sigma) = 1$.
+  \item $\forall i:\; \mathsf{ZKVerify}(\pi_i, S.\mathsf{ACC},\,
+        \mathit{sn}_i,\, \mathit{cm\_new}_i) = 1$.
+  \item $\forall i \neq j:\; \mathit{sn}_i \neq \mathit{sn}_j$
+        (no intra-batch duplicate).
+  \item $\forall i:\; \mathsf{NonMember}(S.\mathsf{SpentSetRoot},\,
+        H(\mathit{sn}_i)) = 1$.
+\end{enumerate}
+If all hold, the output state is:
+\begin{align*}
+  \mathsf{ACC}' &:= \mathsf{ACC}^{\,\prod_i H'(\mathit{cm\_new}_i)} \bmod N,\\
+  \mathsf{SpentSetRoot}' &:= \mathsf{SMT.BatchInsert}(
+    \mathsf{SpentSetRoot},\; [H(\mathit{sn}_i)]_i),\\
+  S' &:= (\mathsf{ACC}',\; \mathsf{SpentSetRoot}',\;
+          \mathit{epoch},\; \mathit{seq}+1).
+\end{align*}
+If any precondition fails, $\mathsf{Apply}$ is undefined and $S$ is unchanged.
+\end{definition}
+
+Here $H': \{0,1\}^* \to \mathbb{P}$ is a collision-resistant hash-to-prime
+function (deterministic probable-prime search, average 3--4 iterations via
+Bertrand's postulate).
+
+\subsection{Atomicity and Determinism}
+
+\begin{definition}[Atomicity]
+$\mathsf{Apply}(S, B)$ is \emph{atomic} if: either all preconditions hold and
+both $\mathsf{ACC}'$ and $\mathsf{SpentSetRoot}'$ are jointly produced as $S'$,
+or $B$ is entirely rejected and $S$ is unchanged.
+No intermediate state is observable.
+\end{definition}
+
+\begin{lemma}[Determinism]\label{lem:determinism}
+$\mathsf{Apply}$ is a pure function: the same $(S, B)$ always yields the same
+$S'$ or always fails.
+\end{lemma}
+\begin{proof}
+Every sub-operation---$H$, $\mathsf{TSig.Verify}$, $\mathsf{ZKVerify}$,
+modular exponentiation mod $N$, and SMT insertion ordered by $\mathit{tx\_list}$
+index---is deterministic and free of external state.
+\end{proof}
+
+\begin{theorem}[Atomic State Transition]\label{thm:atomicity}
+If $\mathsf{Apply}(S, B)$ is accepted, then for all $i$:
+\[
+  \mathit{cm\_new}_i \in \mathsf{Acc}(S'.\mathsf{ACC})
+  \quad\text{and}\quad
+  \mathit{sn}_i \in \mathsf{SpentSet}(S'.\mathsf{SpentSetRoot}),
+\]
+and both memberships are certified by the same threshold signature
+$\sigma' = \mathsf{TSig}(H(B \| S'.\mathsf{ACC} \| S'.\mathsf{SpentSetRoot}
+\| \cdots))$.
+\end{theorem}
+\begin{proof}
+The signature preimage includes $\mathsf{ACC}'$ and $\mathsf{SpentSetRoot}'$
+jointly.
+TSig unforgeability (under discrete log) prevents a valid $\sigma'$ in which
+either field is modified independently.
+A client accepting $\sigma'$ accepts both fields simultaneously.
+\end{proof}
+
+\begin{corollary}[Global State Consistency]\label{cor:consistency}
+All honest verifiers computing $S_0, S_1, S_2, \ldots$ independently via
+$\mathsf{Apply}$ arrive at identical sequences.
+\end{corollary}
+\begin{proof}
+By induction: $S_0$ is fixed; if $S_{k-1}$ is identical across honest
+verifiers and $B_k$ is identical (BFT total order), then
+\cref{lem:determinism} yields identical $S_k$.
+\end{proof}
+
+\subsection{Light Client Verification}
+
+\begin{corollary}[Light Client Protocol]\label{cor:lightclient}
+A coin owner with private witness $(v, \rho, r, s, \mathit{cm})$ verifies
+coin liveness without the full state as follows:
+\begin{enumerate}
+  \item Compute $\mathit{sn}_{\mathit{coin}} = \mathsf{PRF}_s(\rho)$
+        locally (never revealed).
+  \item Obtain the latest finalized $C_k = (B_k, S_k, \sigma_k)$ and verify
+        $\mathsf{TSig.Verify}(\mathit{vk}, \cdot, \sigma_k) = 1$.
+  \item Check $\mathsf{NonMember}(S_k.\mathsf{SpentSetRoot},\;
+        H(\mathit{sn}_{\mathit{coin}})) = 1$.
+  \item Check $\mathsf{Member}(S_k.\mathsf{ACC},\; \mathit{cm},\; w) = 1$.
+\end{enumerate}
+Cost: $O(\log n)$ per Merkle proof, $O(1)$ for TSig and accumulator
+verification.
+\end{corollary}

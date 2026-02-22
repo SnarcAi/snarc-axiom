@@ -1,0 +1,44 @@
+\paragraph{Privacy-preserving payments.}
+The Zerocash line~\cite{ben2014zerocash} standardized the
+nullifier-plus-ZK-proof approach to transaction privacy, and Zcash
+Sapling~\cite{zcash2022protocol} industrialized it with production-grade
+circuit design and a nullifier note commitment scheme.
+\textsc{Axiom}'s cryptographic core shares this lineage but removes the
+blockchain substrate entirely.
+Groth16~\cite{groth2016size} and PLONK~\cite{gabizon2019plonk} underpin our
+``succinct proof, fast verify'' requirements.
+
+\paragraph{Compact-state and ledgerless approaches.}
+Utreexo~\cite{dryja2019utreexo} demonstrates that Bitcoin full-node storage
+can be dramatically compressed by replacing the UTXO set with a dynamic hash
+accumulator and shifting proof storage to users.
+\textsc{Axiom} follows the same ``state = compact root'' intuition but targets
+a stronger goal: no total-order log of past transactions is maintained at all.
+Mimblewimble~\cite{jedusor2016mimblewimble} achieves cut-through compression
+via Pedersen commitments while retaining a blockchain; \textsc{Axiom} further
+eliminates that requirement.
+
+\paragraph{BFT finality and partial synchrony.}
+Our consistency layer is grounded in the partial synchrony model of
+Dwork--Lynch--Stockmeyer~\cite{dwork1988consensus}.
+PBFT~\cite{castro1999pbft} establishes the quorum-intersection argument that
+underpins our \cref{thm:safety,thm:rotation-safety}.
+HotStuff-class protocols provide the $O(\Delta)$ liveness bound used in
+\cref{thm:liveness}.
+
+\paragraph{VRF-based sortition.}
+Algorand~\cite{gilad2017algorand} introduced private VRF sortition for
+committee selection in a Byzantine agreement context, achieving unpredictability
+without a central coordinator.
+\textsc{Axiom} Section~\ref{sec:committee} extends this with stake-weighted
+adaptive sizing, epoch rotation compatibility, and a beacon seed chain that
+resists grinding (\cref{lem:seed}).
+ECVRF is standardized in RFC~9381~\cite{rfc9381}.
+
+\paragraph{Verifiable Delay Functions.}
+Pietrzak~\cite{pietrzak2019vdf} and Wesolowski~\cite{wesolowski2019vdf}
+independently constructed efficient VDFs; Boneh~et~al.~\cite{boneh2018vdfsurvey}
+survey both.
+\textsc{Axiom} uses VDFs in two roles: (i) as an ordering beacon to constrain
+leader discretion (\cref{sec:consistency}), and (ii) as a temporal barrier
+against long-range attacks (\cref{thm:longrange}).

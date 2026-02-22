@@ -1,0 +1,33 @@
+We present \textsc{Snarc Axiom} (\textsc{Axiom}), a cryptographic payment protocol that achieves
+double-spend prevention, full transaction privacy, and fast finality without
+maintaining a global transaction ledger as the canonical state repository.
+Existing privacy-preserving payment systems, including Zcash and its
+predecessors, retain a blockchain as the substrate for nullifier sets and coin
+existence records, imposing storage and bandwidth costs that grow linearly with
+transaction history---creating long-run pressure toward centralization through
+increasing full-node burden.
+\textsc{Axiom} replaces the ledger with two compact state objects: a dynamic
+RSA accumulator over coin commitments (constant 256~bytes) and a Sparse Merkle
+Tree root commitment over the spent nullifier set (constant 32~bytes).
+Spent-set growth is captured by this constant-size root and can be
+checkpointed and archived without affecting verification.
+Transaction validity is established entirely through zero-knowledge proofs;
+coin existence is verified via accumulator membership witnesses; and
+double-spend prevention follows from the uniqueness of nullifiers derived via a
+pseudorandom function.
+Global consistency of these two state objects is achieved through a hybrid
+finality sublayer combining BFT threshold signatures with VDF-based ordering
+beacons, producing finalization certificates in place of ledger entries.
+We formalize six cryptographic security properties---correctness,
+unforgeability, value conservation, double-spend resistance, anonymity, and
+non-malleability---and three distributed-systems properties---safety,
+liveness, and atomic state transition---providing proof sketches under standard
+assumptions (discrete logarithm, collision resistance, PRF security, RSA
+strong assumption, and, where required by the SNARK extractor, a knowledge
+assumption standard in pairing-based proof system analyses).
+We further present a permissionless committee selection mechanism based on VRF
+sortition with stake-weighted admission, and a spam-resistance layer compatible
+with both semi-permissioned and fully open deployments.
+Concrete instantiation with Groth16 over BLS12-381, RSA-2048 accumulators,
+BLS threshold signatures, and ECVRF yields an estimated end-to-end finality of
+2--5 seconds and approximately 60~TPS on reference hardware.

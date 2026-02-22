@@ -1,0 +1,27 @@
+This paper presented \textsc{Axiom}, a cryptographic payment protocol that
+achieves double-spend prevention, full transaction privacy, and fast finality
+without a global transaction ledger.
+The core insight is that blockchain's three roles---canonical ordering, nullifier
+tracking, and coin-validity auditing---can be disaggregated.
+Coin validity becomes a ZK proof; coin existence becomes an accumulator
+membership witness; double-spend prevention becomes a nullifier registry; and
+global consistency becomes a BFT finalization certificate.
+Together, these replace the ledger with two constant-size state roots and a
+thin finality layer.
+
+We formalized this design through nine theorems covering correctness,
+unforgeability, value conservation, double-spend resistance, anonymity,
+non-malleability, safety, liveness, and atomic state transition.
+We extended the model to epoch rotation, permissionless VRF sortition, and a
+composable spam-resistance layer, and provided a concrete instantiation with
+estimated latency of 2--5~seconds and~${\approx}60$~TPS on reference hardware.
+
+\paragraph{Open problems.}
+Four engineering challenges remain for production deployment:
+(i)~stake concentration and plutocracy risk in permissionless admission;
+(ii)~calibration of spam-resistance parameters across heterogeneous
+deployments;
+(iii)~the trusted-setup versus performance trade-off in accumulator and proof
+system selection; and
+(iv)~long-term archive and checkpoint operation at scale.
+We leave formal treatment of these to future work.
