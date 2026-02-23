@@ -132,6 +132,7 @@ Tested on TeX Live 2023. Zero errors, zero warnings.
 - Commercial licensing: see [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md)
 
 ---
+Commercial inquiries: see [COMMERCIAL_OFFER.md](COMMERCIAL_OFFER.md)
 
 ## License (Dual)
 
